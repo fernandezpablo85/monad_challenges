@@ -5,59 +5,92 @@ module Set1 where
 
   import MCPrelude
 
-  type Gen a = Seed -> (a, Seed)
+  -- First.
 
-  allRandsFor :: Seed -> [Integer]
-  allRandsFor s = number : allRandsFor s2
-    where (number, s2) = rand s
+  firstSeed :: Seed
+  firstSeed = mkSeed 1
 
-  allRandsForSeedOne :: [Integer]
-  allRandsForSeedOne = (allRandsFor . mkSeed) 1
+  randsForSeed :: Seed -> [Integer]
+  randsForSeed seed = first : rest
+    where (first, nextSeed) = rand seed
+          rest = randsForSeed nextSeed
 
   fiveRands :: [Integer]
-  fiveRands = take 5 allRandsForSeedOne
+  fiveRands = take 5 $ randsForSeed firstSeed
+
+  -- Second.
 
   randLetter :: Gen Char
-  randLetter = generalA toLetter rand
+  randLetter seed = (letter, seed')
+    where (number, seed') = rand seed
+          letter = toLetter number
 
-  allStringsFor :: Seed -> String
-  allStringsFor n = letter : allStringsFor seed
-    where (letter, seed) = randLetter n
+  randLettersForSeed :: Seed -> [Char]
+  randLettersForSeed seed = first : rest
+    where (first, nextSeed) = randLetter seed
+          rest = randLettersForSeed nextSeed
 
-  randString3 :: String
-  randString3 = take 3 allStringsForSeedOne
-    where allStringsForSeedOne = allStringsFor $ mkSeed 1
+  randString3 :: [Char]
+  randString3 = take 3 $ randLettersForSeed firstSeed
+
+  -- Third.
+
+  type Gen a = Seed -> (a, Seed)
+
+  -- Without generalA
+
+  --randEven :: Gen Integer
+  --randEven seed = (even, seed')
+  --  where (even, seed') = f $ rand seed
+  --        f = (\x -> (2 * fst x, snd x))
+
+  --randOdd :: Gen Integer
+  --randOdd seed = (odd, seed')
+  --  where (odd, seed') = f $ randEven seed
+  --        f = (\x -> ( (succ . fst) x, snd x))
+
+  --randTen :: Gen Integer
+  --randTen seed = (tenth, seed')
+  --  where (tenth, seed') = f $ rand seed
+  --        f = (\x -> (10 * fst x, snd x))
 
   generalA :: (a -> b) -> Gen a -> Gen b
-  generalA f g s = (f x, s')
-    where (x, s') = g s
+  generalA f gen seed = (ret, seed')
+    where (first, seed') = gen seed
+          ret = f first
 
+  -- With generalA
   randEven :: Gen Integer
-  randEven = generalA (* 2) rand
+  randEven = generalA (\x -> x * 2) rand
 
   randOdd :: Gen Integer
-  randOdd = generalA (+ 1) randEven
+  randOdd = generalA (\x -> x +1) randEven
 
   randTen :: Gen Integer
-  randTen = generalA (* 10) randOdd
+  randTen = generalA (\x -> x * 10) rand
 
+  result :: Integer
+  result = product [a, b, c]
+    where (a, _) = randEven firstSeed
+          (b, _) = randOdd firstSeed
+          (c, _) = randTen firstSeed
+
+  -- Fourth
   randPair :: Gen (Char, Integer)
-  randPair s = ((c, i), s'')
-    where (c, s') = randLetter s
-          (i, s'') = rand s'
+  randPair seed = ((char, int), seed'')
+    where (char, seed') = randLetter seed
+          (int, seed'') = rand seed'
 
-  generalPair :: Gen a -> Gen b -> Gen (a, b)
-  generalPair a b s = ((ax, bx), s'')
-    where (ax, s') = a s
-          (bx, s'') = b s'
-
-  randPair' :: Gen (Char, Integer)
-  randPair' = generalPair2 randLetter rand
+  generalPair :: Gen a -> Gen b -> Gen (a,b)
+  generalPair gena genb seed = ((a, b), seed'')
+    where (a, seed') = gena seed
+          (b, seed'') = genb seed'
 
   generalB :: (a -> b -> c) -> Gen a -> Gen b -> Gen c
-  generalB f a b s = (f ax bx, s'')
-    where (ax, s') = a s
-          (bx, s'') = b s'
+  generalB f gena genb seed = (f a b, seed'')
+    where (a, seed') = gena seed
+          (b, seed'') = genb seed'
 
-  generalPair2 :: Gen a -> Gen b -> Gen (a, b)
-  generalPair2 a b = generalB (\x y -> (x, y)) a b
+  generalPair2 :: Gen a -> Gen b -> Gen (a,b)
+  generalPair2 gena genb = generalB makeTuple gena genb
+    where makeTuple = (\x y -> (x,y))
